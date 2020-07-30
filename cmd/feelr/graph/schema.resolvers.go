@@ -10,10 +10,24 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/karansinghgit/gqlgen/graph/generated"
-	"github.com/karansinghgit/gqlgen/graph/model"
+	"github.com/karansinghgit/gqlgen/cmd/feelr/graph/generated"
+	"github.com/karansinghgit/gqlgen/cmd/feelr/graph/model"
 	elastic "github.com/olivere/elastic/v7"
 )
+
+var client *elastic.Client
+
+func init() {
+	var err error
+	client, err = elastic.NewClient(elastic.SetURL("http://localhost:9200"),
+		elastic.SetSniff(false),
+		elastic.SetHealthcheck(false))
+	if err != nil {
+		fmt.Println("Error initializing : ", err)
+		panic("Client fail ")
+	}
+	fmt.Println("ES initialized...")
+}
 
 func (r *mutationResolver) CreateFeelr(ctx context.Context, question string, topic string) (*model.Feelr, error) {
 	f := &model.Feelr{
@@ -201,16 +215,3 @@ type subscriptionResolver struct{ *Resolver }
 //  - When renaming or deleting a resolver the old code will be put in here. You can safely delete
 //    it when you're done.
 //  - You have helper methods in this file. Move them out to keep these resolver files clean.
-var client *elastic.Client
-
-func init() {
-	var err error
-	client, err = elastic.NewClient(elastic.SetURL("http://localhost:9200"),
-		elastic.SetSniff(false),
-		elastic.SetHealthcheck(false))
-	if err != nil {
-		fmt.Println("Error initializing : ", err)
-		panic("Client fail ")
-	}
-	fmt.Println("ES initialized...")
-}
