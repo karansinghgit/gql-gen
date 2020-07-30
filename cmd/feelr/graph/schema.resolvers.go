@@ -10,8 +10,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/karansinghgit/gqlgen-demo/graph/generated"
-	"github.com/karansinghgit/gqlgen-demo/graph/model"
+	"github.com/karansinghgit/gqlgen/graph/generated"
+	"github.com/karansinghgit/gqlgen/graph/model"
 	elastic "github.com/olivere/elastic/v7"
 )
 
