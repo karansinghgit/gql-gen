@@ -6,46 +6,27 @@ import (
 	"time"
 )
 
-type Message interface {
-	IsMessage()
-}
-
 type Chat struct {
-	ID       string    `json:"id"`
-	Sender   *User     `json:"sender"`
-	Receiver *User     `json:"receiver"`
-	Messages []Message `json:"messages"`
+	ID       string `json:"id"`
+	Sender   string `json:"sender"`
+	Receiver string `json:"receiver"`
 }
 
 type Feelr struct {
 	ID        string    `json:"id"`
 	Question  string    `json:"question"`
 	Timestamp time.Time `json:"timestamp"`
-	Topic     *Topic    `json:"topic"`
+	Topic     string    `json:"topic"`
 }
 
-type FeelrMessage struct {
-	Feelr         *Feelr    `json:"feelr"`
-	User1         *User     `json:"user1"`
-	User2         *User     `json:"user2"`
-	User1Response string    `json:"user1Response"`
-	User2Response string    `json:"user2Response"`
-	Timestamp     time.Time `json:"timestamp"`
-}
-
-func (FeelrMessage) IsMessage() {}
-
-type TextMessage struct {
-	ID        string    `json:"id"`
-	Message   string    `json:"message"`
-	Timestamp time.Time `json:"timestamp"`
-}
-
-func (TextMessage) IsMessage() {}
-
-type Topic struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
+type Message struct {
+	Chat           string    `json:"chat"`
+	Sender         string    `json:"sender"`
+	Text           *string   `json:"text"`
+	Feelr          *string   `json:"feelr"`
+	SenderAnswer   *string   `json:"senderAnswer"`
+	ReceiverAnswer *string   `json:"receiverAnswer"`
+	Timestamp      time.Time `json:"timestamp"`
 }
 
 type User struct {

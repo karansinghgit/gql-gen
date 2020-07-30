@@ -5,62 +5,180 @@ package graph
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"log"
+	"time"
 
-	"github.com/elastic/go-elasticsearch/v7"
-	"github.com/elastic/go-elasticsearch/v7/esapi"
-
+	"github.com/google/uuid"
 	"github.com/karansinghgit/gqlgen-demo/graph/generated"
 	"github.com/karansinghgit/gqlgen-demo/graph/model"
+	elastic "github.com/olivere/elastic/v7"
 )
 
-var es *elasticsearch.Client
+func (r *mutationResolver) CreateFeelr(ctx context.Context, question string, topic string) (*model.Feelr, error) {
+	f := &model.Feelr{
+		ID:        uuid.New().String(),
+		Question:  question,
+		Topic:     topic,
+		Timestamp: time.Now(),
+	}
 
-func init() {
-	var err error
-	es, err = elasticsearch.NewDefaultClient()
+	dataJSON, err := json.Marshal(f)
+	js := string(dataJSON)
+	_, err = client.Index().
+		Index("feelr").
+		BodyJson(js).
+		Do(ctx)
+
 	if err != nil {
-		log.Fatalf("Error creating the client: %s", err)
+		return nil, err
 	}
-	idx := "feelr"
-	ctx := context.Background()
+	fmt.Println("[Elastic]Insertion Successful")
+	return f, nil
+}
 
-	_, err = esapi.IndicesDeleteRequest{Index: []string{idx}}.Do(ctx, es)
+func (r *mutationResolver) SendTextMessage(ctx context.Context, chatID string, sender string, text string) (*model.Message, error) {
+	m := &model.Message{
+		Chat:      chatID,
+		Sender:    sender,
+		Text:      &text,
+		Timestamp: time.Now(),
+	}
+
+	dataJSON, err := json.Marshal(m)
+	js := string(dataJSON)
+	_, err = client.Index().
+		Index("feelr").
+		BodyJson(js).
+		Do(ctx)
+
 	if err != nil {
-		log.Fatalf("Error on deleting Index: %s", err)
+		return nil, err
 	}
-	_, err2 := esapi.IndicesCreateRequest{Index: idx}.Do(ctx, es)
-	if err2 != nil {
-		log.Fatalf("Error on creating Index: %s", err)
+	fmt.Println("[Elastic]Insertion Successful")
+	return m, nil
+}
+
+func (r *mutationResolver) SendFeelrMessage(ctx context.Context, chatID string, feelrID string, sender string, answer string) (*model.Message, error) {
+	chatQuery := elastic.NewMatchQuery("chat", chatID)
+	feelrQuery := elastic.NewMatchQuery("feelr", feelrID)
+
+	query := elastic.NewBoolQuery().Must(chatQuery, feelrQuery)
+	searchResult, err := client.Search().
+		Index("feelr").
+		Query(query).
+		Do(ctx)
+
+	if err != nil {
+		return nil, err
 	}
-}
+	var m *model.Message
 
-func (r *mutationResolver) SendTextMessage(ctx context.Context, chatID string, text string) (model.Message, error) {
-	panic(fmt.Errorf("not implemented"))
-}
+	if searchResult.Hits.TotalHits.Value > 0 {
+		res, err := client.Update().Index("feelr").Id(searchResult.Hits.Hits[0].Id).Doc(map[string]interface{}{"receiverAnswer": answer}).Do(ctx)
+		if err != nil {
+			return nil, err
+		}
 
-func (r *mutationResolver) CreateFeelr(ctx context.Context, chatID string, feelrID string, answer string) (*model.Feelr, error) {
-	panic(fmt.Errorf("not implemented"))
-}
+		err = json.Unmarshal(res.GetResult.Source, &m)
+		if err != nil {
+			fmt.Println("Error initializing : ", err)
+			return nil, err
+		}
+	} else {
+		m = &model.Message{
+			Chat:         chatID,
+			Sender:       sender,
+			Feelr:        &feelrID,
+			SenderAnswer: &answer,
+			Timestamp:    time.Now(),
+		}
+		dataJSON, err := json.Marshal(m)
+		js := string(dataJSON)
+		_, err = client.Index().
+			Index("feelr").
+			BodyJson(js).
+			Do(ctx)
 
-func (r *mutationResolver) SendFeelrResponse(ctx context.Context, chatID string, feelrID string, answer string) (*model.Feelr, error) {
-	panic(fmt.Errorf("not implemented"))
+		if err != nil {
+			return nil, err
+		}
+		fmt.Println("[Elastic]Insertion Successful")
+	}
+	return m, nil
 }
 
 func (r *queryResolver) GetTopFeelrs(ctx context.Context, top *int) ([]*model.Feelr, error) {
-	panic(fmt.Errorf("not implemented"))
+	existsQuery := elastic.NewExistsQuery("question")
+	searchResult, err := client.Search().
+		Index("feelr").
+		Query(existsQuery).
+		Sort("timestamp", false).
+		Size(*top).
+		Do(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+	var feelrs []*model.Feelr
+	for _, hit := range searchResult.Hits.Hits {
+		var feelr model.Feelr
+		err := json.Unmarshal(hit.Source, &feelr)
+		if err != nil {
+			return nil, err
+		}
+		feelrs = append(feelrs, &feelr)
+	}
+	return feelrs, nil
 }
 
-func (r *queryResolver) GetMessages(ctx context.Context, chatID string, last *int) ([]model.Message, error) {
-	panic(fmt.Errorf("not implemented"))
+func (r *queryResolver) GetMessages(ctx context.Context, chatID string, last *int) ([]*model.Message, error) {
+	chatQuery := elastic.NewMatchQuery("chat", chatID)
+	searchResult, err := client.Search().
+		Index("feelr").
+		Query(chatQuery).
+		Sort("timestamp", false).
+		Size(*last).
+		Do(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+	var messages []*model.Message
+
+	for _, hit := range searchResult.Hits.Hits {
+		var message model.Message
+		err := json.Unmarshal(hit.Source, &message)
+		if err != nil {
+			return nil, err
+		}
+		messages = append(messages, &message)
+	}
+	return messages, nil
 }
 
 func (r *queryResolver) GetUserInfo(ctx context.Context, userID string) (*model.User, error) {
-	panic(fmt.Errorf("not implemented"))
+	userQuery := elastic.NewMatchQuery("id", userID)
+	searchResult, err := client.Search().
+		Index("feelr").
+		Query(userQuery).
+		Do(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if searchResult.Hits.TotalHits.Value > 0 {
+		fmt.Println("The user doesn't exist!")
+		return nil, err
+	}
+
+	var user *model.User
+	json.Unmarshal(searchResult.Hits.Hits[0].Source, &user)
+	return user, nil
 }
 
-func (r *subscriptionResolver) MessageAdded(ctx context.Context, chatID string) (<-chan model.Message, error) {
+func (r *subscriptionResolver) MessageAdded(ctx context.Context, chatID string) (<-chan *model.Message, error) {
 	panic(fmt.Errorf("not implemented"))
 }
 
@@ -76,3 +194,23 @@ func (r *Resolver) Subscription() generated.SubscriptionResolver { return &subsc
 type mutationResolver struct{ *Resolver }
 type queryResolver struct{ *Resolver }
 type subscriptionResolver struct{ *Resolver }
+
+// !!! WARNING !!!
+// The code below was going to be deleted when updating resolvers. It has been copied here so you have
+// one last chance to move it out of harms way if you want. There are two reasons this happens:
+//  - When renaming or deleting a resolver the old code will be put in here. You can safely delete
+//    it when you're done.
+//  - You have helper methods in this file. Move them out to keep these resolver files clean.
+var client *elastic.Client
+
+func init() {
+	var err error
+	client, err = elastic.NewClient(elastic.SetURL("http://localhost:9200"),
+		elastic.SetSniff(false),
+		elastic.SetHealthcheck(false))
+	if err != nil {
+		fmt.Println("Error initializing : ", err)
+		panic("Client fail ")
+	}
+	fmt.Println("ES initialized...")
+}

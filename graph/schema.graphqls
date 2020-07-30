@@ -4,20 +4,16 @@ type Feelr {
   id: ID!
   question: String!
   timestamp: Time!
-  topic: Topic!
+  topic: String!
 }
 
-type Topic {
-  id: ID!
-  name: String!
-}
-
-type FeelrMessage {
-  feelr: Feelr!
-  user1: User!
-  user2: User!
-  user1Response: String!
-  user2Response: String!
+type Message {
+  chat: ID!
+  sender: ID!
+  text: String
+  feelr: ID
+  senderAnswer: String
+  receiverAnswer: String
   timestamp: Time!
 }
 
@@ -26,31 +22,28 @@ type User {
   name: String!
 }
 
-type TextMessage {
-  id: ID!
-  message: String!
-  timestamp: Time!
-}
-
-union Message = FeelrMessage | TextMessage
-
 type Chat {
   id: ID!
-  sender: User!
-  receiver: User!
-  messages: [Message!]
+  sender: ID!
+  receiver: ID!
 }
 
 type Query {
-  getTopFeelrs(top: Int = 20): [Feelr!]!
-  getMessages(chatID: ID!, last: Int = 50): [Message!]!
+  getTopFeelrs(top: Int = 20): [Feelr!]
+  getMessages(chatID: ID!, last: Int = 50): [Message!]
   getUserInfo(userID: ID!): User!
 }
 
 type Mutation {
-  sendTextMessage(chatID: ID!, text: String!): Message!
-  createFeelr(chatID: ID!, feelrID: ID!, answer: String!): Feelr!
-  sendFeelrResponse(chatID: ID!, feelrID: ID!, answer: String!): Feelr!
+  createFeelr(question: String!, topic: String!): Feelr!
+
+  sendTextMessage(chatID: ID!, sender: ID!, text: String!): Message!
+  sendFeelrMessage(
+    chatID: ID!
+    feelrID: ID!
+    sender: ID!
+    answer: String!
+  ): Message!
 }
 
 type Subscription {
